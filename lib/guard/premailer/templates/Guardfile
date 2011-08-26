@@ -1,0 +1,3 @@
+guard 'premailer' do
+  watch(/^.+(\.html)/)
+end
