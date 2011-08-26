@@ -1,10 +1,10 @@
 require 'guard'
 require 'guard/guard'
 require 'guard/watcher'
-require 'haml'
+require 'premailer'
 
 module Guard
-  class Haml < Guard
+  class Premailer < Guard
     
     def initialize(watchers = [], options = {})
       super(watchers, {
@@ -13,13 +13,23 @@ module Guard
       @watchers, @options = watchers, options
     end
     
-    def compile_haml file
-      content = File.new(file).read
+    def compile input_file, output_file
       begin
-        engine = ::Haml::Engine.new(content, (@options[:haml_options] || {}))
-        engine.render
+        premailer = Premailer.new(input_file, :warn_level => Premailer::Warnings::SAFE)
+
+        # Write the HTML output
+        fout = File.open(output_file, "w")
+        fout.puts premailer.to_inline_css
+        fout.close
+
+        # Output any CSS warnings
+        premailer.warnings.each do |w|
+          ::Guard::UI.info "#{w[:message]} (#{w[:level]}) may not render properly in #{w[:clients]}"
+        end
+        
+        ::Guard::UI.info "successfully ran #{file} through remailer"
       rescue StandardError => error
-        ::Guard::UI.info "HAML Error: " + error.message
+        ::Guard::UI.info "Premailer Error: " + error.message
       end
     end
 
@@ -31,7 +41,7 @@ module Guard
     #
     def get_output(file)
       file_dir = File.dirname(file)
-      file_name = File.basename(file).split('.')[0..-2].join('.')
+      file_name = File.basename(file)
       
       file_dir = file_dir.gsub(Regexp.new("#{@options[:input]}(\/){0,1}"), '') if @options[:input]
       file_dir = File.join(@options[:output], file_dir) if @options[:output]
@@ -51,9 +61,7 @@ module Guard
       paths.each do |file|
         output_file = get_output(file)
         FileUtils.mkdir_p File.dirname(output_file)
-        File.open(output_file, 'w') { |f| f.write(compile_haml(file)) }
-        ::Guard::UI.info "# compiled haml in '#{file}' to html in '#{output_file}'"
-        ::Guard::Notifier.notify("# compiled haml in #{file}", :title => "Guard::Haml", :image => :success) if @options[:notifications]
+        File.open(output_file, 'w') { |f| f.write(compile_haml(file, output_file)) }
       end
       notify paths
     end
